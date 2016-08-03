@@ -1,0 +1,25 @@
+def lambda_handler(event, context):
+    ec2 = boto3.client('ec2')
+    aws_regions = ec2.describe_regions()['Regions']
+    num_connections = 0
+    for region in aws_regions:
+        try:
+            ec2 = boto3.client('ec2', region_name=region['us-east-1'])
+            vpns = ec2.describe_vpn_connections()['VpnConnections']
+            for vpn in vpns:
+                if vpn['State'] == 'available':
+                    num_connections += 1
+                    active_tunnels = 0
+                    if vpn['VgwTelemetry'][0]['Status'] == 'UP':
+                        active_tunnels += 1
+                    if vpn['VgwTelemetry'][1]['Status'] == 'UP':
+                        active_tunnels += 1
+                    put_cloudwatch_metric(vpn['VpnConnectionId'],
+                                        active_tunnels,
+                                        vpn['VpnGatewayId'],
+                                        vpn['CustomerGatewayId'],
+                                        region['RegionName'])
+        except Exception as e:
+            print("Exception: " + str(e))
+            continue
+    return num_connections
